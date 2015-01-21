@@ -21,16 +21,18 @@ overlay.append(subUpload);
 
 
 function handleFileSelect(evt) {
-  var files = evt.target.files; 
+  var input = evt.target; // FileList object
 
   var reader = new FileReader();
   reader.onloadend = function (evt) {
-    var data = evt.target.result;
-    srt = parseSrt(data); // str is the array containing the sub objects
+    var data = reader.result;
+    var subtitleType = input.files[0].type;          
+    srt = parse(data, subtitleType); // srt is the array containing the sub objects  
+    //srt = parseSub(data); 
     currentStrIndex = 0;
-  }
-
-  reader.readAsText(files[0]); // get info about the uploaded file
+  } 
+  
+  reader.readAsText(input.files[0]); // get info about the uploaded file(lastModifiedDate, name, type etc)  
 }
 
 subUpload.on('change', handleFileSelect, false);
@@ -53,7 +55,7 @@ function addOverlay() {
       pointerEvents: "none"
     });
     overlay.show();
-    firstDate = new Date();
+    firstDate = new Date();	
     playSubs(srt);
     return;
   }
@@ -104,8 +106,8 @@ function addOverlay() {
   // this is related to the click-drag rectangle over the area
   overlay.on("mouseup", function (e) {
     //alert('in mouseup');
-    $('#play').css({width: "1100px"}); // optional
-    $('#video_wrapper').css({height: "600px"});	// optional	
+    $('#play').css({width: "1100px"});
+    $('#video_wrapper').css({height: "600px"});		
     //initialized = true;
     overlay.off();
     subLine.css({marginTop: area.height()-54});
@@ -136,13 +138,15 @@ var timer;
 $(document).on("keydown", function (e) {
   if(e.keyCode == 39) { // right arrow
     secondDate = new Date();
-    currentStrIndex -= 1;    
+    currentStrIndex -= 1;
+    //alert('objKey' + srt[currentStrIndex].objKey);
     movement = "forward";
     moveSub();    
   } else if(e.keyCode == 37) { // left arrow
     currentStrIndex -= 2;
     currentStrIndex = Math.max(currentStrIndex, 0)
-    secondDate = new Date();    
+    secondDate = new Date();
+    //alert('objKey' + srt[currentStrIndex].objKey);
     movement = "backward";
     moveSub();
   }   
@@ -150,7 +154,7 @@ $(document).on("keydown", function (e) {
      if(srtIsPaused) { //srt already paused 
         // continue playing the srt 
         srtIsPaused = false; 
-        resumeSrt = true;
+        resumeSrt = true;		
         playSubs(srt, false);
      } else {
         // pause the srt
@@ -158,13 +162,19 @@ $(document).on("keydown", function (e) {
         clearTimeout(timer);        
      }     
   } 
+})
+
+video = $('#video_wrapper');
+
+video.mousedown(function (e){
+    if(isSubPlaying) { alert('you clicked'); }
 });
 
 
-function moveSub() {  
-  if(!srt) { return; }
+function moveSub() {    
+  if(!srt) { return; }  
   clearTimeout(timer);
-  subMovedAtLeastOnce = true;
+  subMovedAtLeastOnce = true;  
   playSubs(srt, true);
 }
 var currentStrIndex = 0;
@@ -175,7 +185,8 @@ function playSubs(srt, moving) {
   var currentTime = 0; 
   if(resumeSrt) { currentTime = srt[currentStrIndex].start; }  
   
-  if(moving) {       	
+  if(moving) {    
+      if(currentStrIndex <0) { alert('mai mic ca zero'); currentStrIndex=0; }  	
       currentTime = srt[currentStrIndex].start;	// the subtitle will appear immediately - 0 mlseconds  
       if(movement === "forward") { resynchronizeSrtForward(); }
       else { resynchronizeSrtBackward(); }      
@@ -200,7 +211,8 @@ function playSubs(srt, moving) {
                 if (newSrt[i].objKey === srt[i].objKey) {                    
                     newSrt[i].start = newStartTime;
                     newSrt[i].end = newEndTime;
-                }
+                } else {alert('the two objects dont match');}
+
            } else {
                 // if obj doesn't exist in new array already                
                 var newSubObj = {objKey: srt[i].objKey, start: newStartTime, end: newEndTime, 
@@ -208,7 +220,7 @@ function playSubs(srt, moving) {
                 newSrt.push(newSubObj);  
                 if(srt[i].line2) {newSubObj.line2=srt[i].line2;}
            }
-      }      
+      }
   }
 
 
@@ -231,7 +243,8 @@ function playSubs(srt, moving) {
                 if (newSrt[i].objKey === srt[i].objKey) {                    
                     newSrt[i].start = newStartTime;
                     newSrt[i].end = newEndTime;
-                }
+                } else {alert('the two objects dont match');}
+
            } else {
                 // if obj doesn't exist in new array already                
                 var newSubObj = {objKey: srt[i].objKey, start: newStartTime, end: newEndTime, 
@@ -242,6 +255,7 @@ function playSubs(srt, moving) {
       }      
   }
 
+
   function getNewEndTime(diff, oldEndTime, movementType) { 
         var  newEndTime;
         if(movementType === 'forward') { newEndTime = oldEndTime - diff; }
@@ -250,6 +264,7 @@ function playSubs(srt, moving) {
 	return newEndTime;
   } 
 
+
   function getNewStartTime(diff, oldStartTime, movementType) {
 	var newStartTime;
         if(movementType === 'forward') { newStartTime = oldStartTime - diff; }
@@ -257,44 +272,9 @@ function playSubs(srt, moving) {
         newStartTime = fromSecondsToString(newStartTime); 
         return newStartTime;
   }
+  
 
-  function fromSecondsToString(numOfSec) {
-      var newStringTime;
-      if(numOfSec >=60 ) {
-           var minutes, sec, mlsec;  
-           var hours = '00:';       
-           var modulo = numOfSec % 60;
-           minutes = (numOfSec - modulo)/60;
-
-           if(minutes>60) { hours='0'+ parseInt(minutes/60); minutes=minutes%60; }
-           else if(minutes==60) {hours='01'; minutes=0;} 
-
-           modulo = modulo.toFixed(3);
-           var n = modulo.toString();
-           if(n.indexOf(".") > -1) {
-             var arr = n.split('.');
-             sec = arr[0];
-             mlsec = arr[1];
-           } 
-           if(sec<10) { sec = '0'+sec; }
-           if(minutes<10) { minutes = '0'+minutes; }           
-           newStringTime = '00:'+minutes+':'+sec+','+mlsec;
-      } else {
-           numOfSec = numOfSec.toFixed(3);
-           var n = numOfSec.toString();
-           if(n.indexOf(".") > -1) {
-             var arr = n.split('.');
-             sec = arr[0];
-             mlsec = arr[1];
-           } 
-           if(sec<10) { sec = '0'+sec; }
-           newStringTime = '00:00:'+sec+','+mlsec;  
-      }      
-      
-      return newStringTime; 
-  }   
-
-  function showNextSub() {           
+  function showNextSub() {       
     line1.hide(); line2.hide();
     var sub = srt[currentStrIndex];  
     if(!moving && !subMovedAtLeastOnce && sub) { 
@@ -312,7 +292,7 @@ function playSubs(srt, moving) {
     
   }
 
-  function showSub(sub) {        
+  function showSub(sub) {       
     timer = setTimeout(function () {
       currentTime = sub.start;
       line1.text(sub.line1); line1.show();
@@ -348,6 +328,45 @@ function playSubs(srt, moving) {
    
 }
 
+
+
+function fromSecondsToString(numOfSec) {
+  var newStringTime;
+  if(numOfSec >=60 ) {
+       var minutes, sec, mlsec;  
+       var hours = '00:';       
+       var modulo = numOfSec % 60;
+       minutes = (numOfSec - modulo)/60;
+
+       if(minutes>60) { hours='0'+ parseInt(minutes/60); minutes=minutes%60; }
+       else if(minutes==60) {hours='01'; minutes=0;} 
+
+       modulo = modulo.toFixed(3);
+       var n = modulo.toString();
+       if(n.indexOf(".") > -1) {
+         var arr = n.split('.');
+         sec = arr[0];
+         mlsec = arr[1];
+       } 
+       if(sec<10) { sec = '0'+sec; }
+       if(minutes<10) { minutes = '0'+minutes; }           
+       newStringTime = '00:'+minutes+':'+sec+','+mlsec;
+  } else {
+       numOfSec = numOfSec.toFixed(3);
+       var n = numOfSec.toString();
+       if(n.indexOf(".") > -1) {
+         var arr = n.split('.');
+         sec = arr[0];
+         mlsec = arr[1];
+       } 
+       if(sec<10) { sec = '0'+sec; }
+       newStringTime = '00:00:'+sec+','+mlsec;  
+  }      
+  
+  return newStringTime; 
+} 
+
+
 function toMs(timeStr) {     
     var spl = timeStr.split(",");    
     var time = spl[0].split(":"), ms = parseInt(spl[1], 10);    
@@ -355,17 +374,72 @@ function toMs(timeStr) {
     return ms + (s + m*60 + h*60*60)*1000;
 }
 
+function parse(data, subtitleType) {
+    if(subtitleType === "application/x-subrip") { // .srt file format        
+        srt = parseSrt(data); // srt is the array containing the sub objects
+    } else if(subtitleType === "text/x-microdvd" ){ // .sub file format
+        srt = parseSub(data);		
+    }
+
+    return srt;
+}
+
+function parseSub(data) {	
+    var lines = data.split("\n"); // all the lines from the subtitle file
+    var res = []; // an array with sub objects that will be returned 
+
+    for(var i = 0, j = 1; i < lines.length; i++) {
+        var framerate, sub;
+        var line = lines[i];        
+        if(i === 0) { //this is the first line of the .sub file
+			var last = line.lastIndexOf("}"); 
+            framerate = parseInt(line.substring(last+1));
+        }  
+		else {      
+		    var m = line.match(/{(.*?)}/g);
+		 	if(m) {
+				var start = m[0];
+				var end = m[1]; 
+				start = start.replace('{','').replace('}', '') / framerate; // this is in seconds
+				end = end.replace('{', '').replace('}', '') / framerate; // also in seconds
+				start = start * 1000; // this is in mlseconds
+				end = end * 1000; // also mlseconds
+				var last = line.lastIndexOf("}"); 
+				var subtitles = line.substring(last+1).split("|");
+				var line1 = subtitles[0];	
+				var line2 = subtitles[1];
+
+				sub = {objKey: j, start: start, end: end}; // sub object with start and end properties
+				sub.line1 = line1;
+				res.push(sub); 
+				j++;				
+				if(line2) {
+					sub.line2 = line2; // if exists add the second line to the sub obj										
+				}	
+
+			}	
+		}
+        
+    }	
+	return res;
+
+}
+
+
+
 function parseSrt(data) {
   var lines = data.split("\n"); // all the lines from the subtitle file
-  var res = []; // an array with sub objects that will be returned   	
+  var res = []; // an array with sub objects that will be returned 
+  // these are the properties of sub obj: {start, end, line1, line2}	
 
   for(var i = 0, j = 1; i < lines.length; i++) {
+    
     var line = lines[i];
-    var m = line.match(/(.*)\s-->\s(.*)/)
+    var m = line.match(/(.*)\s-->\s(.*)/);
     if(m) {
-      var start = m[1], end = m[2]; // where start is the appearence time 
+      var start = m[1], end = m[2]; // where start is the appearence time 	  	
       // and end is the dissapearence time of the subtitle
-      var sub = {objKey: j, start: toMs(start), end: toMs(end)}; 
+      var sub = {objKey: j, start: toMs(start), end: toMs(end)}; // sub object with start and end properties
 
       var line1 = lines[i+1];
       var line2 = lines[i+2];
@@ -378,6 +452,6 @@ function parseSrt(data) {
         i += 1;
       }
     }
-  }
+  }	
   return res;
 }
